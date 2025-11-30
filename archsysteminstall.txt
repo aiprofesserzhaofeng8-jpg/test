@@ -1,0 +1,155 @@
+download arch*.iso package
+-https://wiki.archlinuxcn.org/
+
+install virtualbox
+# 恢复 Ubuntu 官方源
+sudo cp /etc/apt/sources.list /etc/apt/sources.list.tuna.backup
+# bash model
+sudo tee /etc/apt/sources.list > /dev/null <<EOF
+deb http://archive.ubuntu.com/ubuntu/ noble main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ noble-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ noble-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+EOF
+
+sudo apt update
+# 1. 移除 Ubuntu 仓库版本
+sudo apt remove --purge virtualbox-ext-pack
+# 2. 下载官方版本（7.0.16 对应你安装的 VirtualBox 版本）
+wget https://download.virtualbox.org/virtualbox/7.0.16/Oracle_VM_VirtualBox_Extension_Pack-7.0.16.vbox-extpack
+# 3. 使用 VBoxManage 安装
+sudo VBoxManage extpack install Oracle_VM_VirtualBox_Extension_Pack-7.0.16.vbox-extpack
+# 4. 清理下载文件
+rm Oracle_VM_VirtualBox_Extension_Pack-7.0.16.vbox-extpack
+
+creat VirtualBox
+virtualbox
+
+setting:
+# 假设你的虚拟机名称是 "Arch Linux"，ISO 文件路径是 ~/arch.iso
+VBoxManage storageattach "Arch Linux" \
+    --storagectl "IDE" \
+    --port 0 \
+    --device 0 \
+    --type dvddrive \
+    --medium ~/arch.iso
+
+setting virtualbox to uefi start
+system setting:
+	board:select efi
+	processer:selec PAE/NX
+
+install arch:reference https://wiki.archlinuxcn.org/wiki/%E5%AE%89%E8%A3%85%E6%8C%87%E5%8D%97
+partition:
+fdisk -l #check the disk status
+
+已安装系统上的挂载点	分区	分区类型	注释	建议大小
+/boot1	/dev/efi_system_partition	EFI System	EFI 系统分区	1 GiB
+[SWAP]	/dev/swap_partition	Linux swap	交换空间	至少 4 GiB
+/	/dev/root_partition	Linux root (x86-64)	根目录	设备剩余空间，至少 23-32 GiB
+
+fdisk /dev/sda #disk format and path
+command:n #means partition
+
+change partition form type
+command:l #check the partition form type supported
+command:t #change partition form type
+boot(sta1):ef
+swap(sta2):82
+boot(sta3):83
+command:w #write
+
+format
+root(sta3):mkfs.xfs /dev/sda3
+boot(sta1):mkfs.fat -F 32 /dev/sda1
+swap(sta2):mkswap /dev/sda2
+
+mount:we now in liux sys, we need mount my disk to temporary mount point.
+mount /dev/sda3 /mnt
+# mnt is the real sys root partition
+mount --mkdir /dev/sda1 /mnt/boot
+swapon /dev/sda2
+
+command:df -h #check the partition mount
+command:free #check the swap partition
+
+set mirror site:in china
+curl -L 'https://archlinux.org/mirrorlist/?country=CN&protocol=https' -o /etc/pacman.d/mirrorlist
+vim /etc/pacman.d/mirrorlist
+# choose a mirror site
+
+install requirement package
+pacstrap -K /mnt base linux linux-firmware intel-ucode vim vi nano wget base-devel zip unzip man-db man-pages htop openssh git p7zip gzip base-devel
+# there are no vconsole.conf, that may incur keyboard.
+# enter arch-chroot /mnt first
+
+arch-chroot /mnt
+pacman -S xfsprogs
+touch /etc/vconsole.conf
+mkinitcpio -P
+
+# generate fstab file, that used to mk the file sys be automobile mount when sys boot.
+genfstab -U /mnt > /mnt/etc/fstab
+# check the file wheather be mount
+vim /mnt/etc/fstab
+# force copy the file when facing that file not exist
+cp -f fstab /mnt/etc/fstab
+
+# setting time and location
+ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+# generate /etc/adjtime
+hwclock --systohc
+
+# setting files:locale.gen and locale.conf, because programn and database need localization file, they all need filed setting.
+# generate locale.conf file and edit LANG parameter.
+locale-gen
+# choose zh_CN UTF-8 UTF-8
+# create locale.conf and edit LANG
+LANG=en.US.UTF-8
+
+# setting hostname
+enter ect and create hostname file and setting hostname.
+
+# setting password
+command:passwd
+
+# install boot guide programe
+pacman -S grup efibootmgr
+
+# mount efi sys partition, choose a bootloaderid name GRUB and excute command to make GRUB EFI apply grubx64.efi install to boot/EFI/GRUB/ ,finally, install modeule to /boot/grub/x86_64-efi/
+command: grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+
+# generate a configuration file
+grub-mkconfig -o /boot/grub/grub.cfg
+
+# exit chroot
+exit
+# umount partition
+umount -R /mnt
+reboot
+
+delete iso file
+
+
+tips
+when forget password, there a method to deal this problem.
+restart you sys and enter key "e"
+input some of word "init=/bin/sh" in setting parameter at "linux" line, then Ctrl+X
+then mount sys:mount -o remount,rw /
+then input password:passwd
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
